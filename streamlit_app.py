@@ -1,56 +1,82 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import seaborn as sns
 import matplotlib.pyplot as plt
+import joblib
 
-# Load trained model
-model = joblib.load("attrition_model.pkl")
-
-# App Config
-st.set_page_config(page_title="HR Attrition Dashboard", layout="wide")
-st.markdown("<h1 style='text-align: center; color: white;'>🔍 Employee Attrition Prediction Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center; color: gray;'>Upload employee data and find out who is likely to leave 🔄</h4>", unsafe_allow_html=True)
-st.write("---")
+st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_icon="📊")
 
 # Sidebar
-st.sidebar.header("📁 Upload Employee CSV Data")
+st.sidebar.title("📁 Upload Employee CSV Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 
-# Main Area
+# Load model
+model = joblib.load("attrition_model.pkl")
+
+st.title("🔍 Employee Attrition Prediction Dashboard")
+
+# App description
+st.markdown("""
+Welcome to the **HR Analytics Dashboard**.  
+This app predicts whether an employee will leave the company (attrition) using a machine learning model.
+You can also explore key visual insights based on the uploaded data.
+""")
+
+# Sample CSV download
+with open("WA_Fn-UseC_-HR-Employee-Attrition.csv", "rb") as f:
+    st.download_button("📥 Download Sample CSV", f, "sample.csv", "text/csv")
+
+# Process CSV
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Uploaded Employee Data Preview")
+    st.success("✅ File uploaded successfully!")
+
+    # Show preview
+    st.subheader("👁️ Preview of Uploaded Data")
     st.dataframe(df.head())
 
-    # One-hot encode and align
+    # Encode target
+    df['Attrition'] = df['Attrition'].apply(lambda x: 1 if x == 'Yes' else 0)
     df_encoded = pd.get_dummies(df, drop_first=True)
-    model_input = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.csv")
-    model_input = pd.get_dummies(model_input.drop("Attrition", axis=1), drop_first=True)
-    df_encoded = df_encoded.reindex(columns=model_input.columns, fill_value=0)
 
-    if st.button("🔮 Predict Attrition"):
-        prediction = model.predict(df_encoded)
-        df["Predicted Attrition"] = ["Yes" if val == 1 else "No" for val in prediction]
+    # Heatmap checkbox
+    if st.checkbox("📌 Show Heatmap"):
+        st.subheader("📉 Correlation Heatmap")
+        plt.figure(figsize=(16, 10))
+        sns.heatmap(df_encoded.corr(), cmap='coolwarm')
+        st.pyplot(plt)
 
-        st.subheader("📊 Prediction Results")
-        for i, row in df.iterrows():
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                st.write(f"**Employee {row['EmployeeNumber']}**")
-            with col2:
-                if row["Predicted Attrition"] == "Yes":
-                    st.warning("⚠️ At Risk of Leaving")
-                else:
-                    st.success("✅ Likely to Stay")
-        st.write("---")
+    # Predictions
+    if "Attrition" in df_encoded.columns:
+        X = df_encoded.drop("Attrition", axis=1)
+        predictions = model.predict(X)
+        df["Predicted_Attrition"] = ["Yes" if pred == 1 else "No" for pred in predictions]
+        st.subheader("🎯 Prediction Results")
+        st.dataframe(df[["EmployeeNumber", "Attrition", "Predicted_Attrition"]].head())
 
-# Optional Correlation Heatmap
-st.subheader("📈 Feature Correlation with Attrition")
-if st.checkbox("Show Heatmap"):
-    df_orig = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.csv")
-    df_orig['Attrition'] = df_orig['Attrition'].apply(lambda x: 1 if x == 'Yes' else 0)
-    corr = pd.get_dummies(df_orig, drop_first=True).corr()
-    plt.figure(figsize=(10, 12))
-    sns.heatmap(corr[['Attrition']].sort_values(by='Attrition', ascending=False), annot=True, cmap='coolwarm')
-    st.pyplot(plt)
+    # --------- Graphs Section ----------
+    st.subheader("📊 Data Insights")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Attrition Count**")
+        sns.countplot(data=df, x='Attrition')
+        st.pyplot(plt.gcf())
+
+        st.markdown("**Attrition by Department**")
+        plt.figure()
+        sns.countplot(data=df, x='Department', hue='Attrition')
+        plt.xticks(rotation=45)
+        st.pyplot(plt.gcf())
+
+    with col2:
+        st.markdown("**Monthly Income Distribution**")
+        plt.figure()
+        sns.histplot(data=df, x='MonthlyIncome', bins=30, kde=True)
+        st.pyplot(plt.gcf())
+
+        st.markdown("**Job Satisfaction vs Attrition**")
+        plt.figure()
+        sns.boxplot(data=df, x='Attrition', y='JobSatisfaction')
+        st.pyplot(plt.gcf())
