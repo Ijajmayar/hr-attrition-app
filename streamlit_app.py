@@ -9,6 +9,14 @@ st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_ico
 # Sidebar
 st.sidebar.title("📁 Upload Employee CSV Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+try:
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ File uploaded successfully.")
+    st.dataframe(df.head())
+except Exception as e:
+    st.error("⚠️ Could not read the uploaded file. Please ensure it's a .csv file and not a renamed .txt or broken file.")
+    st.markdown("📂 [Download Sample CSV from Google Drive](https://drive.google.com/your-link)")
+
 
 # Load model
 model = joblib.load("attrition_model.pkl")
