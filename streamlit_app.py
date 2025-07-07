@@ -10,7 +10,7 @@ st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_ico
 st.sidebar.title("📁 Upload Employee CSV Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 try:
-    if uploaded_file is not None:
+   if uploaded_file is not None:
     if uploaded_file.size == 0:
         st.error("🚫 The uploaded file is empty. Please upload a valid CSV file.")
     else:
@@ -33,6 +33,7 @@ try:
 except Exception as e:
     st.error("⚠️ Could not read the uploaded file. Please ensure it's a .csv file and not a renamed .txt or broken file.")
     st.markdown("📂 [Download Sample CSV from Google Drive](https://drive.google.com/ijju93985@gmail.com)")
+
 
 
 # Load model
