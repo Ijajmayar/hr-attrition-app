@@ -32,7 +32,7 @@ try:
     st.dataframe(df.head())
 except Exception as e:
     st.error("⚠️ Could not read the uploaded file. Please ensure it's a .csv file and not a renamed .txt or broken file.")
-    st.markdown("📂 [Download Sample CSV from Google Drive](https://drive.google.com/your-link)")
+    st.markdown("📂 [Download Sample CSV from Google Drive](https://drive.google.com/ijju93985@gmail.com)")
 
 
 # Load model
