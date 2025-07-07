@@ -10,7 +10,24 @@ st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_ico
 st.sidebar.title("📁 Upload Employee CSV Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 try:
-    df = pd.read_csv(uploaded_file)
+    if uploaded_file is not None:
+    if uploaded_file.size == 0:
+        st.error("🚫 The uploaded file is empty. Please upload a valid CSV file.")
+    else:
+        try:
+            df = pd.read_csv(uploaded_file)
+
+            # Optional: Check for column count
+            if df.shape[1] < 5:
+                st.error("⚠️ The uploaded file has too few columns. Make sure it's the correct CSV format.")
+            else:
+                st.success("✅ File uploaded successfully!")
+                st.dataframe(df.head())
+        except pd.errors.EmptyDataError:
+            st.error("❌ The uploaded file appears to be empty or unreadable. Try using a fresh download.")
+        except Exception as e:
+            st.error(f"⚠️ Error reading file: {str(e)}")
+
     st.success("✅ File uploaded successfully.")
     st.dataframe(df.head())
 except Exception as e:
