@@ -2,8 +2,11 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 import joblib
-import io
 
 st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_icon="📊")
 
@@ -11,94 +14,91 @@ st.set_page_config(page_title="HR Attrition Prediction", layout="wide", page_ico
 st.sidebar.title("📁 Upload Employee CSV Data")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 
-# Load model once
-model = joblib.load("attrition_model.pkl")
+# Model selection
+model_option = st.sidebar.selectbox("🔍 Choose ML Model", ["Random Forest", "Logistic Regression", "XGBoost"])
 
-st.title("🔍 Employee Attrition Prediction Dashboard")
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ File uploaded successfully!")
 
-st.markdown("""
-Welcome to the **HR Analytics Dashboard**.  
-This app predicts whether an employee will leave the company (attrition) using a machine learning model.
-You can also explore key visual insights based on the uploaded data.
-""")
+    # Encode target
+    df['Attrition'] = df['Attrition'].apply(lambda x: 1 if x == 'Yes' else 0)
+    df_encoded = pd.get_dummies(df, drop_first=True)
 
-# Sample CSV download
-with open("WA_Fn-UseC_-HR-Employee-Attrition.csv", "rb") as f:
-    st.download_button("📥 Download Sample CSV", f, "sample.csv", "text/csv")
+    # Split features and target
+    X = df_encoded.drop("Attrition", axis=1)
+    y = df_encoded["Attrition"]
 
-# Safely process CSV
-df = None  # define df outside try block
+    # Model setup
+    if model_option == "Logistic Regression":
+        model = LogisticRegression(max_iter=1000)
+    elif model_option == "XGBoost":
+        model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+    else:
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
 
-if uploaded_file is not None:
-    try:
-        content = uploaded_file.getvalue()
-        if not content:
-            st.error("🚫 The uploaded file is empty. Please select a valid CSV.")
-        else:
-            decoded_file = io.StringIO(content.decode("utf-8"))
-            df = pd.read_csv(decoded_file)
+    model.fit(X, y)
+    predictions = model.predict(X)
+    df["Predicted_Attrition"] = ["Yes" if p == 1 else "No" for p in predictions]
 
-            if df.shape[1] < 5:
-                st.error("⚠️ The file has too few columns.")
-                df = None
-            else:
-                st.success("✅ File uploaded successfully!")
-                st.dataframe(df.head())
-    except pd.errors.EmptyDataError:
-        st.error("❌ Could not read file. Try re-exporting it or use the sample CSV.")
-    except Exception as e:
-        st.error(f"⚠️ Unexpected error: {str(e)}")
+    st.subheader("🎯 Prediction Results")
+    st.dataframe(df[["EmployeeNumber", "Attrition", "Predicted_Attrition"]].head())
 
-# Process if data loaded
-if df is not None:
-    try:
-        # Encode target column if exists
-        if 'Attrition' in df.columns:
-            df['Attrition'] = df['Attrition'].apply(lambda x: 1 if x == 'Yes' else 0)
+    # Evaluation Metrics
+    st.subheader("📉 Evaluation Metrics")
+    cm = confusion_matrix(y, predictions)
+    st.text("Confusion Matrix:")
+    st.write(cm)
+    st.text("Classification Report:")
+    st.text(classification_report(y, predictions))
 
-        df_encoded = pd.get_dummies(df, drop_first=True)
+    # ROC Curve
+    if hasattr(model, "predict_proba"):
+        y_proba = model.predict_proba(X)[:, 1]
+        fpr, tpr, _ = roc_curve(y, y_proba)
+        roc_auc = auc(fpr, tpr)
 
-        # Heatmap checkbox
-        if st.checkbox("📌 Show Heatmap"):
-            st.subheader("📉 Correlation Heatmap")
-            plt.figure(figsize=(16, 10))
-            sns.heatmap(df_encoded.corr(), cmap='coolwarm')
-            st.pyplot(plt)
+        plt.figure()
+        plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], linestyle='--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('ROC Curve')
+        plt.legend()
+        plt.grid()
+        st.pyplot(plt)
 
-        # Predictions
-        if "Attrition" in df_encoded.columns:
-            X = df_encoded.drop("Attrition", axis=1)
-            predictions = model.predict(X)
-            df["Predicted_Attrition"] = ["Yes" if pred == 1 else "No" for pred in predictions]
-            st.subheader("🎯 Prediction Results")
-            st.dataframe(df[["EmployeeNumber", "Attrition", "Predicted_Attrition"]].head())
+    # Feature Importance
+    if hasattr(model, 'feature_importances_'):
+        st.subheader("📌 Feature Importances")
+        importances = pd.Series(model.feature_importances_, index=X.columns)
+        fig, ax = plt.subplots(figsize=(10, 8))
+        importances.nlargest(15).plot(kind='barh', ax=ax)
+        plt.title('Top 15 Feature Importances')
+        st.pyplot(fig)
 
-        # --------- Graphs Section ----------
-        st.subheader("📊 Data Insights")
+    # Visualization
+    st.subheader("📊 Data Insights")
+    col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Attrition Count**")
+        sns.countplot(data=df, x='Attrition')
+        st.pyplot(plt.gcf())
 
-        with col1:
-            st.markdown("**Attrition Count**")
-            sns.countplot(data=df, x='Attrition')
-            st.pyplot(plt.gcf())
+        st.markdown("**Attrition by Department**")
+        plt.figure()
+        sns.countplot(data=df, x='Department', hue='Attrition')
+        plt.xticks(rotation=45)
+        st.pyplot(plt.gcf())
 
-            st.markdown("**Attrition by Department**")
-            plt.figure()
-            sns.countplot(data=df, x='Department', hue='Attrition')
-            plt.xticks(rotation=45)
-            st.pyplot(plt.gcf())
+    with col2:
+        st.markdown("**Monthly Income Distribution**")
+        plt.figure()
+        sns.histplot(data=df, x='MonthlyIncome', bins=30, kde=True)
+        st.pyplot(plt.gcf())
 
-        with col2:
-            st.markdown("**Monthly Income Distribution**")
-            plt.figure()
-            sns.histplot(data=df, x='MonthlyIncome', bins=30, kde=True)
-            st.pyplot(plt.gcf())
-
-            st.markdown("**Job Satisfaction vs Attrition**")
-            plt.figure()
-            sns.boxplot(data=df, x='Attrition', y='JobSatisfaction')
-            st.pyplot(plt.gcf())
-
-    except Exception as e:
-        st.error(f"⚠️ Something went wrong during processing: {e}")
+        st.markdown("**Job Satisfaction vs Attrition**")
+        plt.figure()
+        sns.boxplot(data=df, x='Attrition', y='JobSatisfaction')
+        st.pyplot(plt.gcf())
